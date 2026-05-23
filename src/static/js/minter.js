@@ -232,5 +232,66 @@ function setStatus(text, type = 'info') {
     statusDiv.className = type === 'error' ? 'status-error' : 'status-info';
 }
 
+const fileInput = document.getElementById('file');
+const uploadBox = document.getElementById('uploadBox');
+const fileNameText = document.getElementById('fileName');
+
+if (fileInput && uploadBox && fileNameText) {
+    fileInput.addEventListener('change', (e) => {
+        handleFileSelect(e.target.files[0]);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadBox.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            uploadBox.style.borderColor = 'var(--accent-primary)';
+            uploadBox.style.background = 'rgba(0, 242, 255, 0.05)';
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadBox.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            uploadBox.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+            uploadBox.style.background = 'rgba(255, 255, 255, 0.02)';
+        }, false);
+    });
+
+    uploadBox.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleFileSelect(files[0]);
+        }
+    }, false);
+}
+
+function handleFileSelect(file) {
+    if (!file) return;
+    
+    const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+    fileNameText.innerHTML = `📄 <strong>${file.name}</strong> (${sizeInMB} MB)`;
+    
+    if (file.type.startsWith('image/')) {
+        const existingThumb = document.getElementById('uploadThumbnail');
+        if (existingThumb) existingThumb.remove();
+        
+        const img = document.createElement('img');
+        img.id = 'uploadThumbnail';
+        img.src = URL.createObjectURL(file);
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '150px';
+        img.style.marginTop = '15px';
+        img.style.borderRadius = '10px';
+        img.style.border = '2px solid var(--accent-primary)';
+        img.style.display = 'block';
+        img.style.marginLeft = 'auto';
+        img.style.marginRight = 'auto';
+        
+        uploadBox.appendChild(img);
+    }
+}
+
 document.getElementById('mintAnotherBtn').onclick = () => window.location.reload();
 window.onload = () => { checkIpfsStatus(); if (window.ethereum) connect(); };
