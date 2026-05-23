@@ -24,13 +24,19 @@ async function checkIpfsStatus() {
         const data = await res.json();
         const badge = document.getElementById('ipfsBadge');
         if (data.online) {
-            badge.innerText = "IPFS: ONLINE";
+            badge.innerText = `IPFS: ONLINE (${data.mode === 'pinata' ? 'Pinata' : 'Local'})`;
             badge.classList.add('active');
             document.getElementById('ipfsWarning').style.display = 'none';
         } else {
             badge.innerText = "IPFS: OFFLINE";
             badge.classList.remove('active');
-            if (activeMode === 'upload') document.getElementById('ipfsWarning').style.display = 'block';
+            if (activeMode === 'upload') {
+                document.getElementById('ipfsWarning').style.display = 'block';
+                document.getElementById('ipfsWarning').innerHTML = `
+                    ⚠️ <strong>IPFS Storage is Offline</strong><br>
+                    Please start your local IPFS Desktop or daemon, or configure Pinata API credentials in your environment.
+                `;
+            }
         }
     } catch { }
 }
@@ -151,33 +157,67 @@ async function showSuccessCard(url, hash, id, receipt) {
     document.getElementById('resContract').innerText = defaultContract;
     document.getElementById('resNet').innerText = currentChainId === 11155111 ? `11155111 (Sepolia Testnet)` : (currentChainId || '1337 (Local Ganache)');
 
-    document.getElementById('resLocalLink').href = `http://127.0.0.1:8080/ipfs/${hash}`;
-    document.getElementById('resPublicLink').href = `https://ipfs.io/ipfs/${hash}`;
+    // Use local gateway or Pinata/public gateways for links
+    const pinataGw = 'https://gateway.pinata.cloud/ipfs/';
+    const publicGw = 'https://ipfs.io/ipfs/';
+    const localGw = 'http://127.0.0.1:8080/ipfs/';
+
+    document.getElementById('resLocalLink').href = `${localGw}${hash}`;
+    document.getElementById('resPublicLink').href = `${publicGw}${hash}`;
     document.getElementById('resEtherscan').href = `https://sepolia.etherscan.io/tx/${receipt.transactionHash}`;
     document.getElementById('resEtherscan').innerText = '🔍 Etherscan (Explorer)';
-
-    const localGw = 'http://127.0.0.1:8080/ipfs/';
-    const publicGw = 'https://dweb.link/ipfs/';
 
     document.getElementById('resultTokenId').innerText = `#${id}`;
     document.getElementById('resultTitle').innerText = document.getElementById('nftTitle').value;
     document.getElementById('resultDescText').innerText = document.getElementById('nftDesc').value;
-    
-    // Attempt to load preview from Local Gateway (Instant) 
-    try {
-        const previewRes = await fetch(`${localGw}${hash}`);
-        const meta = await previewRes.json();
-        let imgUrl = meta.image.replace('ipfs://', localGw);
-        if (imgUrl.includes('https://ipfs.io/ipfs/')) imgUrl = imgUrl.replace('https://ipfs.io/ipfs/', localGw);
-        document.getElementById('resultImage').src = imgUrl;
-    } catch (err) {
-        console.warn("Local preview failed, trying public gateway...", err);
+
+    // Check if we can display an instant local preview
+    const fileInput = document.getElementById('file');
+    let previewLoaded = false;
+    if (activeMode === 'upload' && fileInput && fileInput.files && fileInput.files[0]) {
         try {
-            const previewRes = await fetch(`${publicGw}${hash}`);
-            const meta = await previewRes.json();
-            let imgUrl = meta.image.replace('ipfs://', publicGw);
-            document.getElementById('resultImage').src = imgUrl;
-        } catch {
+            document.getElementById('resultImage').src = URL.createObjectURL(fileInput.files[0]);
+            previewLoaded = true;
+        } catch (e) {
+            console.warn("Failed to load local Object URL preview", e);
+        }
+    }
+
+    if (!previewLoaded) {
+        // Fallback: Build image URL by fetching metadata from IPFS gateways
+        const gateways = [localGw, pinataGw, publicGw];
+        let metadata = null;
+
+        for (const gw of gateways) {
+            try {
+                const previewRes = await fetch(`${gw}${hash}`);
+                if (previewRes.ok) {
+                    metadata = await previewRes.json();
+                    break;
+                }
+            } catch (err) {
+                console.warn(`Failed to fetch metadata from ${gw}`, err);
+            }
+        }
+
+        if (metadata && metadata.image) {
+            let imgUrl = metadata.image;
+            if (imgUrl.startsWith('ipfs://')) {
+                const cidImg = imgUrl.replace('ipfs://', '');
+                // Try loading from local IPFS gateway, fallback to Pinata gateway
+                document.getElementById('resultImage').src = `${localGw}${cidImg}`;
+                document.getElementById('resultImage').onerror = function() {
+                    this.onerror = null;
+                    this.src = `${pinataGw}${cidImg}`;
+                    this.onerror = function() {
+                        this.onerror = null;
+                        this.src = `${publicGw}${cidImg}`;
+                    };
+                };
+            } else {
+                document.getElementById('resultImage').src = imgUrl;
+            }
+        } else {
             document.getElementById('resultImage').src = "https://via.placeholder.com/400?text=NFT+Minted";
         }
     }

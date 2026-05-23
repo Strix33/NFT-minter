@@ -107,23 +107,62 @@ function renderNFT(id, metadata, owner) {
     card.className = 'nft-card';
     
     let imageUrl = metadata.image || "";
+    let primaryUrl = imageUrl;
+    let fallbacks = [];
+
     let cidImg = "";
-    let isIpns = imageUrl.includes('ipns');
-    
     if (imageUrl.includes('/ipfs/')) cidImg = imageUrl.split('/ipfs/')[1];
-    else if (imageUrl.includes('/ipns/')) cidImg = imageUrl.split('/ipns/')[1];
     else if (imageUrl.startsWith('ipfs://')) cidImg = imageUrl.replace('ipfs://', '');
-    else if (imageUrl.startsWith('ipns://')) cidImg = imageUrl.replace('ipns://', '');
-    else cidImg = imageUrl.split('/').pop();
-    
-    let basePath = isIpns ? '/ipns/' : '/ipfs/';
-    const localImgUrl = 'http://127.0.0.1:8080' + basePath + cidImg;
-    const publicImgUrl = 'https://ipfs.io' + basePath + cidImg;
+    else if (!imageUrl.startsWith('http')) cidImg = imageUrl;
+
+    if (cidImg) {
+        const localUrl = `http://127.0.0.1:8080/ipfs/${cidImg}`;
+        const pinataUrl = `https://gateway.pinata.cloud/ipfs/${cidImg}`;
+        const publicUrl = `https://ipfs.io/ipfs/${cidImg}`;
+        const cloudflareUrl = `https://cloudflare-ipfs.com/ipfs/${cidImg}`;
+        const placeholderUrl = `https://via.placeholder.com/400?text=NFT+Asset`;
+
+        primaryUrl = localUrl;
+        fallbacks = [pinataUrl, publicUrl, cloudflareUrl, placeholderUrl];
+    } else {
+        if (imageUrl.startsWith('https://gateway.pinata.cloud/ipfs/')) {
+            const cid = imageUrl.replace('https://gateway.pinata.cloud/ipfs/', '');
+            fallbacks = [
+                `http://127.0.0.1:8080/ipfs/${cid}`,
+                `https://ipfs.io/ipfs/${cid}`,
+                `https://cloudflare-ipfs.com/ipfs/${cid}`,
+                `https://via.placeholder.com/400?text=NFT+Asset`
+            ];
+        } else if (imageUrl.startsWith('https://ipfs.io/ipfs/')) {
+            const cid = imageUrl.replace('https://ipfs.io/ipfs/', '');
+            fallbacks = [
+                `http://127.0.0.1:8080/ipfs/${cid}`,
+                `https://gateway.pinata.cloud/ipfs/${cid}`,
+                `https://cloudflare-ipfs.com/ipfs/${cid}`,
+                `https://via.placeholder.com/400?text=NFT+Asset`
+            ];
+        }
+    }
+
+    let onerrorAttr = "";
+    if (fallbacks.length > 0) {
+        onerrorAttr = `onerror="this.onerror=null; `;
+        for (let idx = 0; idx < fallbacks.length; idx++) {
+            if (idx === 0) {
+                onerrorAttr += `this.src='${fallbacks[idx]}'; this.onerror=function() { `;
+            } else if (idx === fallbacks.length - 1) {
+                onerrorAttr += `this.onerror=null; this.src='${fallbacks[idx]}';`;
+            } else {
+                onerrorAttr += `this.onerror=null; this.src='${fallbacks[idx]}'; this.onerror=function() { `;
+            }
+        }
+        onerrorAttr += ' }'.repeat(fallbacks.length - 1) + '"';
+    }
 
     const shortOwner = owner.substring(0, 6) + '...' + owner.substring(38);
 
     card.innerHTML = `
-        <img src="${localImgUrl}" class="nft-image" alt="${metadata.name}" onerror="this.onerror=null; this.src='${publicImgUrl}'; setTimeout(() => { if (this.naturalWidth === 0) this.src='https://via.placeholder.com/400?text=Asset+Unavailable'; }, 3000);">
+        <img src="${primaryUrl}" class="nft-image" alt="${metadata.name}" ${onerrorAttr}>
         <div class="nft-info">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span class="nft-id">TOKEN #${id}</span>
