@@ -10,6 +10,16 @@ app = Flask(__name__)
 app.debug = True
 app.config.from_pyfile('config.py')
 
+PINATA_API_KEY = os.environ.get('PINATA_API_KEY', '')
+PINATA_SECRET_KEY = os.environ.get('PINATA_SECRET_KEY', '')
+PINATA_BASE_URL = 'https://api.pinata.cloud'
+
+def pinata_headers():
+    return {
+        'pinata_api_key': PINATA_API_KEY,
+        'pinata_secret_api_key': PINATA_SECRET_KEY
+    }
+
 @app.after_request
 def add_header(response):
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
@@ -23,11 +33,15 @@ def index():
 
 @app.route("/ipfs_status")
 def ipfs_status():
-    """Checks if the local IPFS daemon is reachable."""
+    """Checks if Pinata cloud IPFS is reachable."""
+    if not PINATA_API_KEY or not PINATA_SECRET_KEY:
+        return jsonify({"online": False, "error": "Pinata API keys not configured"})
     try:
-        r = requests.post("http://127.0.0.1:5001/api/v0/id", timeout=2)
+        r = requests.get(f"{PINATA_BASE_URL}/data/testAuthentication",
+                         headers=pinata_headers(), timeout=5)
         if r.status_code == 200:
-            return jsonify({"online": True, "version": r.json()['AgentVersion']})
+            return jsonify({"online": True, "version": "Pinata Cloud"})
+        return jsonify({"online": False, "error": r.text})
     except Exception as e:
         return jsonify({"online": False, "error": str(e)})
 
@@ -40,13 +54,17 @@ def nft_minter():
         nft_file = request.files['file']
         
         try:
-            # 1. Upload the asset file
-            img_res = requests.post('http://127.0.0.1:5001/api/v0/add', files={'file': nft_file})
+            # 1. Upload the image asset to Pinata
+            img_res = requests.post(
+                f"{PINATA_BASE_URL}/pinning/pinFileToIPFS",
+                files={'file': (nft_file.filename, nft_file.stream, nft_file.mimetype)},
+                headers=pinata_headers()
+            )
             img_res.raise_for_status()
-            file_info = img_res.json()
-            nft_file_url = app.config['IPFS_FILE_URL'] + file_info['Hash']
+            img_hash = img_res.json()['IpfsHash']
+            nft_file_url = f"https://gateway.pinata.cloud/ipfs/{img_hash}"
 
-            # 2. Create Metadata
+            # 2. Create Metadata JSON
             NFT_info = {
                 "name": title,
                 "description": description,
@@ -54,33 +72,31 @@ def nft_minter():
                 "owner": owner_address,
                 "attributes": []
             }
-            
-            # Write temp JSON
-            temp_json = f'metadata_{file_info["Hash"]}.json'
-            with open(temp_json, 'w') as f:
-                json.dump(NFT_info, f, indent=4)
-            
-            # 3. Upload Metadata JSON
-            with open(temp_json, 'rb') as f:
-                meta_res = requests.post('http://127.0.0.1:5001/api/v0/add', files={'file': f})
+
+            # 3. Upload Metadata JSON to Pinata
+            meta_res = requests.post(
+                f"{PINATA_BASE_URL}/pinning/pinJSONToIPFS",
+                json={
+                    "pinataContent": NFT_info,
+                    "pinataMetadata": {"name": f"{title}_metadata.json"}
+                },
+                headers={**pinata_headers(), 'Content-Type': 'application/json'}
+            )
             meta_res.raise_for_status()
-            meta_info = meta_res.json()
-            metadata_url = app.config['IPFS_FILE_URL'] + meta_info['Hash']
-            
-            # Cleanup
-            os.remove(temp_json)
+            meta_hash = meta_res.json()['IpfsHash']
+            metadata_url = f"https://gateway.pinata.cloud/ipfs/{meta_hash}"
 
             return jsonify({
                 "success": True,
                 "metadata_url": metadata_url,
-                "hash": meta_info['Hash']
+                "hash": meta_hash
             })
-            
+
         except Exception as e:
-            print(f"IPFS Error: {e}")
+            print(f"Pinata Upload Error: {e}")
             return jsonify({
-                "success": False, 
-                "error": "IPFS Connection Failed. Please ensure IPFS Desktop is running on port 5001."
+                "success": False,
+                "error": f"Cloud upload failed: {str(e)}"
             }), 503
     
     return render_template("page_3.html")
