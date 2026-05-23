@@ -7,8 +7,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-app.debug = True
-app.config.from_pyfile('config.py')
+app.debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+try:
+    app.config.from_pyfile('config.py')
+except Exception:
+    pass  # config.py is optional in cloud deployments
 
 PINATA_API_KEY = os.environ.get('PINATA_API_KEY', '')
 PINATA_SECRET_KEY = os.environ.get('PINATA_SECRET_KEY', '')
