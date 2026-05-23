@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFT Minting Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --accent-primary: #00f2ff;
+            --accent-secondary: #7000ff;
+            --text-main: #ffffff;
+            --text-dim: #94a3b8;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --success-color: #00ff88;
+            --error-color: #ff4d4d;
+            --warning-color: #ffbd4d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Lexend', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        body {
+            background-color: var(--bg-color);
+            background-image:
+                radial-gradient(circle at 10% 10%, rgba(0, 242, 255, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(112, 0, 255, 0.03) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%; max-width: 600px; padding: 40px;
+            background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border); border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative; z-index: 1; transition: all 0.5s ease;
+        }
+
+        .header { text-align: center; margin-bottom: 30px; }
+        h1 {
+            font-size: 2.5rem; font-weight: 800;
+            background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .badge-bar { display: flex; justify-content: center; gap: 10px; margin-top: 10px; }
+        .badge {
+            font-size: 0.65rem; padding: 4px 8px; border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border);
+            color: var(--text-dim); text-transform: uppercase; font-weight: 800;
+        }
+        .badge.active { color: var(--accent-primary); border-color: rgba(0, 242, 255, 0.3); background: rgba(0, 242, 255, 0.05); }
+
+        .btn { cursor: pointer; border: none; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; }
+        .btn-wallet { width: 100%; padding: 14px; background: rgba(246, 133, 27, 0.1); color: #f6851b; border: 1px solid rgba(246, 133, 27, 0.2); margin-bottom: 25px; }
+        .btn-wallet.connected { background: rgba(0, 255, 136, 0.1); color: var(--success-color); border-color: rgba(0, 255, 136, 0.2); }
+
+        .ipfs-banner {
+            background: rgba(255, 189, 77, 0.1); border: 1px solid rgba(255, 189, 77, 0.2);
+            color: var(--warning-color); padding: 12px; border-radius: 12px; font-size: 0.75rem;
+            margin-bottom: 20px; text-align: center; display: none;
+        }
+
+        .mode-tabs { display: flex; background: rgba(255, 255, 255, 0.03); border-radius: 14px; padding: 4px; margin-bottom: 25px; }
+        .mode-tab { flex: 1; padding: 10px; font-size: 0.75rem; font-weight: 700; color: var(--text-dim); border: none; background: transparent; cursor: pointer; border-radius: 10px; transition: 0.3s; }
+        .mode-tab.active { background: rgba(255, 255, 255, 0.07); color: var(--text-main); }
+
+        .form-group { margin-bottom: 20px; text-align: left; }
+        input, textarea { width: 100%; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; color: white; font-size: 0.9rem; transition: 0.3s; }
+        input:focus, textarea:focus { outline: none; border-color: var(--accent-primary); background: rgba(0, 0, 0, 0.3); }
+
+        .file-zone { border: 2px dashed var(--card-border); padding: 30px; border-radius: 16px; margin-bottom: 30px; position: relative; cursor: pointer; text-align: center; }
+        .file-zone input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+        .btn-mint { width: 100%; padding: 18px; background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: white; font-size: 1.1rem; box-shadow: 0 10px 30px -5px rgba(112, 0, 255, 0.3); }
+        .btn-mint:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+
+        .success-card { display: none; animation: fadeInScale 0.5s ease; text-align: center; }
+        @keyframes fadeInScale { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+        .nft-preview-container { display: flex; gap: 25px; margin-bottom: 30px; align-items: flex-start; }
+        .nft-preview { flex: 1; aspect-ratio: 1; background: rgba(0, 0, 0, 0.2); border-radius: 20px; overflow: hidden; border: 1px solid var(--card-border); }
+        .nft-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+        .nft-main-info { flex: 1.2; text-align: left; }
+        .token-id-large { font-size: 2.5rem; font-weight: 800; color: var(--success-color); line-height: 1; margin-bottom: 5px; }
+        .nft-title-large { font-size: 1.2rem; font-weight: 600; color: var(--text-main); margin-bottom: 15px; }
+
+        .tech-stats-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+            background: rgba(0, 0, 0, 0.25); padding: 20px; border-radius: 20px;
+            border: 1px solid var(--card-border); margin-bottom: 25px;
+        }
+
+        .stat-item { text-align: left; }
+        .stat-label { font-size: 0.6rem; color: var(--text-dim); text-transform: uppercase; font-weight: 800; margin-bottom: 2px; }
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--accent-primary); word-break: break-all; }
+
+        .gateway-bar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 25px; }
+        .gateway-group { display: flex; gap: 8px; justify-content: center; }
+        .btn-gateway { flex: 1; font-size: 0.65rem; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text-main); text-decoration: none; border-radius: 10px; transition: 0.2s; }
+        .btn-gateway:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-primary); }
+        .btn-gateway.local { background: rgba(0, 242, 255, 0.1); border-color: rgba(0, 242, 255, 0.3); color: var(--accent-primary); font-weight: 700; }
+
+        #status { margin-top: 25px; font-size: 0.8rem; padding: 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--card-border); text-align: center; }
+        .hidden { display: none !important; }
+        .loader { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.2); border-top: 2px solid var(--accent-primary); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; margin-right: 8px; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        
+        <div class="header">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <h1>NFT Minting</h1>
+                <a href="/marketplace" style="text-decoration: none; color: var(--accent-primary); font-size: 0.8rem; font-weight: 700; border: 1px solid rgba(0, 242, 255, 0.3); padding: 8px 16px; border-radius: 10px; background: rgba(0, 242, 255, 0.05);">VIEW MARKETPLACE ➡️</a>
+            </div>
+            <div class="badge-bar">
+                <span class="badge" id="netName">DISCONNECTED</span>
+                <span class="badge active" id="ipfsBadge">IPFS: SCANNING</span>
+            </div>
+        </div>
+
+        <div id="ipfsWarning" class="ipfs-banner">
+            ⚠️ <strong>IPFS Desktop is Offline</strong><br>
+            Please start IPFS Desktop to enable metadata generation.
+        </div>
+
+        <div id="walletView">
+            <button id="connectBtn" class="btn btn-wallet">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Mirror_Logo.svg" width="20">
+                Connect MetaMask
+            </button>
+        </div>
+
+        <div id="formView">
+            <div class="mode-tabs">
+                <button id="tabUpload" class="mode-tab active">UPLOAD ASSET</button>
+                <button id="tabLink" class="mode-tab">EXISTING IPFS</button>
+            </div>
+
+            <form id="mintForm">
+                <div class="form-group"><input type="text" id="nftTitle" name="content1" placeholder="NFT Asset Name" required></div>
+                <div class="form-group"><textarea id="nftDesc" name="content5" placeholder="Metadata Description..." required></textarea></div>
+                
+                <div id="uploadBox" class="file-zone">
+                    <input type="file" id="file" name="file">
+                    <p id="fileName" style="font-size: 0.8rem; color: var(--text-dim);">Drop asset here or click to browse</p>
+                </div>
+
+                <div id="linkBox" class="form-group hidden">
+                    <input type="url" id="directLink" placeholder="ipfs://... or https://...">
+                </div>
+
+                <button type="submit" id="mintBtn" class="btn btn-mint">Confirm & Mint Asset ⛏️</button>
+            </form>
+        </div>
+
+        <div id="successView" class="success-card">
+            <div class="nft-preview-container">
+                <div class="nft-preview"><img id="resultImage" src="" alt="Minted NFT"></div>
+                <div class="nft-main-info">
+                    <div id="resultTokenId" class="token-id-large">#0</div>
+                    <div id="resultTitle" class="nft-title-large">-</div>
+                    <p id="resultDescText" style="font-size: 0.75rem; color: var(--text-dim); line-height: 1.4;"></p>
+                </div>
+            </div>
+            
+            <div class="tech-stats-grid">
+                <div class="stat-item" style="grid-column: span 2;">
+                    <div class="stat-label">Transaction Hash</div>
+                    <div id="resHash" class="stat-value" style="font-size: 0.65rem;">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Block Number</div>
+                    <div id="resBlock" class="stat-value">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Gas Energy Used</div>
+                    <div id="resGas" class="stat-value">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Network ID</div>
+                    <div id="resNet" class="stat-value">1337 (Ganache)</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Smart Contract</div>
+                    <div id="resContract" class="stat-value" style="font-size: 0.6rem;">-</div>
+                </div>
+            </div>
+
+            <div class="gateway-bar">
+                <div class="stat-label" style="text-align: center;">Verify via IPFS Gateways</div>
+                <div class="gateway-group">
+                    <a id="resLocalLink" href="#" target="_blank" class="btn-gateway local">⚡ Local Node (Fastest)</a>
+                </div>
+                <div class="gateway-group">
+                    <a id="resPublicLink" href="#" target="_blank" class="btn-gateway">Gateway 1 (Cloud)</a>
+                    <a id="resEtherscan" href="#" target="_blank" class="btn-gateway" style="border-color: var(--accent-secondary); color: #fff; background: rgba(112, 0, 255, 0.1);">🔍 Etherscan (Explorer)</a>
+                </div>
+            </div>
+
+            <button id="mintAnotherBtn" class="btn btn-reset">Mint Another Asset</button>
+        </div>
+
+        <div id="status">System Ready</div>
+    </div>
+
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script>
+        const defaultContract = "0xb5cEe73CC170D760Ce72817119b79801eE0D461F";
+        const abi = [
+            "function mintNFT(string memory tokenURI) public returns (uint256)",
+            "function getItemId() public view returns(uint256)",
+            "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+            "event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId)",
+            "event ApprovalForAll(address indexed owner, address indexed operator, bool approved)"
+        ];
+
+        let provider, signer, activeMode = 'upload', currentChainId = 0;
+
+        const connectBtn = document.getElementById('connectBtn');
+        const mintForm = document.getElementById('mintForm');
+        const statusDiv = document.getElementById('status');
+        const mintBtn = document.getElementById('mintBtn');
+
+        async function checkIpfsStatus() {
+            try {
+                const res = await fetch('/ipfs_status');
+                const data = await res.json();
+                const badge = document.getElementById('ipfsBadge');
+                if (data.online) {
+                    badge.innerText = "IPFS: ONLINE";
+                    badge.classList.add('active');
+                    document.getElementById('ipfsWarning').style.display = 'none';
+                } else {
+                    badge.innerText = "IPFS: OFFLINE";
+                    badge.classList.remove('active');
+                    if (activeMode === 'upload') document.getElementById('ipfsWarning').style.display = 'block';
+                }
+            } catch { }
+        }
+
+        const tabUpload = document.getElementById('tabUpload');
+        const tabLink = document.getElementById('tabLink');
+        tabUpload.onclick = () => {
+            activeMode = 'upload';
+            tabUpload.classList.add('active'); tabLink.classList.remove('active');
+            document.getElementById('uploadBox').classList.remove('hidden');
+            document.getElementById('linkBox').classList.add('hidden');
+            document.getElementById('file').required = true;
+            document.getElementById('directLink').required = false;
+            checkIpfsStatus();
+        };
+        tabLink.onclick = () => {
+            activeMode = 'link';
+            tabLink.classList.add('active'); tabUpload.classList.remove('active');
+            document.getElementById('linkBox').classList.remove('hidden');
+            document.getElementById('uploadBox').classList.add('hidden');
+            document.getElementById('file').required = false;
+            document.getElementById('directLink').required = true;
+            document.getElementById('ipfsWarning').style.display = 'none';
+        };
+
+        async function connect() {
+            if (typeof window.ethereum === 'undefined') return setStatus("MetaMask not found!", "error");
+            try {
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                const network = await provider.getNetwork();
+                const networkNames = {
+                    1: 'MAINNET',
+                    11155111: 'SEPOLIA',
+                    1337: 'GANACHE'
+                };
+                currentChainId = network.chainId;
+                document.getElementById('netName').innerText = `Network: ${networkNames[currentChainId] || (network.name ? network.name.toUpperCase() : 'UNKNOWN')}`;
+                document.getElementById('netName').classList.add('active');
+                connectBtn.innerText = "Authorized ✅";
+                connectBtn.classList.add('connected');
+            } catch (err) { setStatus("Error: " + err.message, "error"); }
+        }
+
+        connectBtn.onclick = connect;
+
+        mintForm.onsubmit = async (e) => {
+            e.preventDefault();
+            if (!signer) return setStatus("Please connect wallet", "error");
+            mintBtn.disabled = true;
+
+            try {
+                let metadataUrl = '';
+                let metadataHash = '';
+
+                if (activeMode === 'upload') {
+                    setStatus("Uploading to IPFS...");
+                    const formData = new FormData(mintForm);
+                    
+                    // Add Owner Address to Metadata
+                    const address = await signer.getAddress();
+                    formData.append('owner_address', address);
+
+                    const res = await fetch('/nftMinter', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.error || "Upload Failed");
+                    metadataUrl = data.metadata_url;
+                    metadataHash = data.hash;
+                } else {
+                    metadataUrl = document.getElementById('directLink').value;
+                    metadataHash = metadataUrl.split('/').pop().split(':').pop();
+                }
+
+                setStatus("Awaiting Signature...");
+                const contract = new ethers.Contract(defaultContract, abi, signer);
+                const tx = await contract.mintNFT(metadataUrl);
+                
+                setStatus("Mining Blockchain Receipt...");
+                const receipt = await tx.wait();
+                
+                if (receipt.status === 0) throw new Error("Blockchain Transaction Failed. Please check your balance or contract state.");
+
+                // Robust way to find the Transfer event
+                let transferEvent = receipt.events?.find(x => x.event === 'Transfer');
+                
+                // Fallback: If ethers didn't automatically decode it (common in some v5 scenarios)
+                if (!transferEvent && receipt.logs) {
+                    const iface = new ethers.utils.Interface(abi);
+                    for (const log of receipt.logs) {
+                        try {
+                            const parsedLog = iface.parseLog(log);
+                            if (parsedLog.name === 'Transfer') {
+                                transferEvent = { args: parsedLog.args };
+                                break;
+                            }
+                        } catch (e) { /* Not a Transfer event */ }
+                    }
+                }
+
+                if (!transferEvent || !transferEvent.args) {
+                    throw new Error("Minting succeeded but Transfer event was not found in receipt. Please refresh.");
+                }
+
+                const tokenId = transferEvent.args.tokenId.toString();
+                
+                await showSuccessCard(metadataUrl, metadataHash, tokenId, receipt);
+            } catch (err) {
+                setStatus(err.message, "error");
+                mintBtn.disabled = false;
+            }
+        };
+
+        async function showSuccessCard(url, hash, id, receipt) {
+            document.getElementById('resHash').innerText = receipt.transactionHash;
+            document.getElementById('resBlock').innerText = receipt.blockNumber;
+            document.getElementById('resGas').innerText = `${receipt.gasUsed.toString()} Units`;
+            document.getElementById('resContract').innerText = defaultContract;
+            document.getElementById('resNet').innerText = currentChainId === 11155111 ? `11155111 (Sepolia Testnet)` : (currentChainId || '1337 (Local Ganache)');
+
+            document.getElementById('resLocalLink').href = `http://127.0.0.1:8080/ipfs/${hash}`;
+            document.getElementById('resPublicLink').href = `https://ipfs.io/ipfs/${hash}`;
+            document.getElementById('resEtherscan').href = `https://sepolia.etherscan.io/tx/${receipt.transactionHash}`;
+            document.getElementById('resEtherscan').innerText = '🔍 Etherscan (Explorer)';
+
+            const localGw = 'http://127.0.0.1:8080/ipfs/';
+            const publicGw = 'https://dweb.link/ipfs/';
+
+            document.getElementById('resultTokenId').innerText = `#${id}`;
+            document.getElementById('resultTitle').innerText = document.getElementById('nftTitle').value;
+            document.getElementById('resultDescText').innerText = document.getElementById('nftDesc').value;
+            
+            // Attempt to load preview from Local Gateway (Instant) 
+            try {
+                const previewRes = await fetch(`${localGw}${hash}`);
+                const meta = await previewRes.json();
+                let imgUrl = meta.image.replace('ipfs://', localGw);
+                if (imgUrl.includes('https://ipfs.io/ipfs/')) imgUrl = imgUrl.replace('https://ipfs.io/ipfs/', localGw);
+                document.getElementById('resultImage').src = imgUrl;
+            } catch (err) {
+                console.warn("Local preview failed, trying public gateway...", err);
+                try {
+                    const previewRes = await fetch(`${publicGw}${hash}`);
+                    const meta = await previewRes.json();
+                    let imgUrl = meta.image.replace('ipfs://', publicGw);
+                    document.getElementById('resultImage').src = imgUrl;
+                } catch {
+                    document.getElementById('resultImage').src = "https://via.placeholder.com/400?text=NFT+Minted";
+                }
+            }
+
+            document.getElementById('formView').classList.add('hidden');
+            document.getElementById('successView').style.display = 'block';
+            setStatus("Minted Successfully!", "success");
+        }
+
+        function setStatus(text, type = 'info') {
+            statusDiv.innerText = text;
+            statusDiv.className = type === 'error' ? 'status-error' : 'status-info';
+        }
+
+        document.getElementById('mintAnotherBtn').onclick = () => window.location.reload();
+        window.onload = () => { checkIpfsStatus(); if (window.ethereum) connect(); };
+    </script>
+</body>
+</html>

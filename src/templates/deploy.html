@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deploy NFT Contract</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --accent-primary: #00f2ff;
+            --accent-secondary: #7000ff;
+            --text-main: #ffffff;
+            --text-dim: #94a3b8;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --success-color: #00ff88;
+            --error-color: #ff4d4d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Lexend', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        body {
+            background-color: var(--bg-color);
+            background-image:
+                radial-gradient(circle at 10% 10%, rgba(0, 242, 255, 0.03) 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(112, 0, 255, 0.03) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%; max-width: 600px; padding: 40px;
+            background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border); border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.2rem; font-weight: 800; margin-bottom: 20px;
+            background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .btn { cursor: pointer; border: none; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; width: 100%; padding: 16px; margin-bottom: 20px; font-size: 1.1rem; }
+        .btn-wallet { background: rgba(246, 133, 27, 0.1); color: #f6851b; border: 1px solid rgba(246, 133, 27, 0.2); }
+        .btn-wallet.connected { background: rgba(0, 255, 136, 0.1); color: var(--success-color); border-color: rgba(0, 255, 136, 0.2); pointer-events: none; }
+        .btn-deploy { background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: white; box-shadow: 0 10px 30px -5px rgba(112, 0, 255, 0.3); }
+        .btn-deploy:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.1); }
+        .btn-deploy:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .status-box { margin-top: 20px; padding: 15px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--card-border); font-size: 0.9rem; word-break: break-all; display: none; }
+        .success-text { color: var(--success-color); font-weight: bold; margin-bottom: 10px; }
+        
+        .loader { width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; animation: spin 1s linear infinite; display: none; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .nav-link { margin-top: 20px; display: inline-block; color: var(--accent-primary); text-decoration: none; font-size: 0.9rem; }
+        .nav-link:hover { text-decoration: underline; }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Deploy Smart Contract</h1>
+        <p style="color: var(--text-dim); margin-bottom: 30px;">Deploy your NFT Contract dynamically using MetaMask.</p>
+
+        <button id="connectBtn" class="btn btn-wallet">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Mirror_Logo.svg" width="24" alt="MetaMask">
+            Connect MetaMask
+        </button>
+
+        <button id="deployBtn" class="btn btn-deploy" disabled>
+            <span id="deployText">Deploy Contract</span>
+            <div id="deployLoader" class="loader"></div>
+        </button>
+
+        <div id="statusBox" class="status-box"></div>
+
+        <a href="/nftMinter" class="nav-link">Go to Minting Dashboard ➡️</a>
+    </div>
+
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script>
+        const abi = {{ abi | safe }};
+        const bytecode = "{{ bytecode }}";
+        
+        let provider, signer;
+        const connectBtn = document.getElementById('connectBtn');
+        const deployBtn = document.getElementById('deployBtn');
+        const statusBox = document.getElementById('statusBox');
+        const deployText = document.getElementById('deployText');
+        const deployLoader = document.getElementById('deployLoader');
+
+        async function connect() {
+            if (typeof window.ethereum === 'undefined') {
+                showStatus("MetaMask not found! Please install it.", true);
+                return;
+            }
+            try {
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                signer = provider.getSigner();
+                
+                const address = await signer.getAddress();
+                connectBtn.innerHTML = `Connected: ${address.substring(0,6)}...${address.substring(38)}`;
+                connectBtn.classList.add('connected');
+                deployBtn.disabled = false;
+                showStatus("Wallet connected. Ready to deploy.");
+            } catch (err) {
+                showStatus("Connection error: " + err.message, true);
+            }
+        }
+
+        connectBtn.onclick = connect;
+
+        deployBtn.onclick = async () => {
+            if (!signer) return;
+            try {
+                deployBtn.disabled = true;
+                deployText.innerText = "Deploying...";
+                deployLoader.style.display = "block";
+                showStatus("Please approve the transaction in MetaMask...");
+
+                const factory = new ethers.ContractFactory(abi, bytecode, signer);
+                const contract = await factory.deploy();
+                
+                showStatus(`Transaction sent! Waiting for confirmation...<br><span class="mono">Tx Hash: ${contract.deployTransaction.hash}</span>`);
+                
+                await contract.deployTransaction.wait();
+
+                statusBox.innerHTML = `
+                    <div class="success-text">🎉 Contract Deployed Successfully!</div>
+                    <div style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 5px;">Contract Address:</div>
+                    <div class="mono" style="color: var(--accent-primary); background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid var(--accent-primary); user-select: all;">${contract.address}</div>
+                    <div style="margin-top: 15px; font-size: 0.8rem; color: #ffbd4d;">Please copy this address and use it in your Minting Dashboard or Marketplace!</div>
+                `;
+            } catch (err) {
+                showStatus("Deployment failed: " + err.message, true);
+            } finally {
+                deployBtn.disabled = false;
+                deployText.innerText = "Deploy Contract";
+                deployLoader.style.display = "none";
+            }
+        };
+
+        function showStatus(msg, isError = false) {
+            statusBox.style.display = 'block';
+            statusBox.innerHTML = msg;
+            statusBox.style.color = isError ? 'var(--error-color)' : 'var(--text-main)';
+            statusBox.style.borderColor = isError ? 'rgba(255, 77, 77, 0.3)' : 'var(--card-border)';
+        }
+
+        if (window.ethereum) connect();
+    </script>
+</body>
+</html>
